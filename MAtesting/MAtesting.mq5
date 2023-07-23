@@ -48,7 +48,6 @@ int OnInit() {
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason) {
 
-
    Print("Expert removed");
 
 }
@@ -81,7 +80,7 @@ void OnTick() {
 
       // trade exit
       string exitSignal = MA_ExitSignal(close1,close2,ma1,ma2);         // check exit signal "EXIT_LONG" or "EXIT_SHORT"
-      if(exitSignal == "EXIT_LONG" || exitSignal == "EXIT_SHORT") {     
+      if(exitSignal == "EXIT_LONG" || exitSignal == "EXIT_SHORT") {
          CloseTrades(MagicNumber,exitSignal);                          // execute exit trade
       }
       Sleep(1000);
@@ -89,10 +88,18 @@ void OnTick() {
       // entry signal and trade placement
       string entrySignal = MA_EntrySignal(close1,close2,ma1,ma2);   // check entry signal "LONG" or "SHORT"
       Comment("EA #",MagicNumber," | ",exitSignal," | ",entrySignal, " SIGNAL DETECTED!");
-      
+
       if((entrySignal == "LONG" || entrySignal == "SHORT") && CheckPlacedPositions(MagicNumber) == false) {    // check signal and check if any placed positions
          ulong ticket = OpenTrades(entrySignal,MagicNumber,FixedVolume);              // execute entry trade
+
+         //SL & TP Trade modification
+         if(ticket > 0) {
+            double stopLoss = CalculateStopLoss(entrySignal,SLFixedPoints,SLFixedPointsMA,ma1);
+            double takeProfit = CalculateTakeProfit(entrySignal,TPFixedPoints);
+         }
       }
+      //Position Management
+
    }
 }
 
@@ -335,5 +342,50 @@ void CloseTrades(ulong pMagic,string pExitSignal) {
          }
       }
    }
+}
+//+--------------------Position Management Functions----------------------------------------------+
+double CalculateStopLoss(string pEntrySigal,int pSLFixedPoints,int pSLFixedPointsMA,double pMA) {
+   double stopLoss = 0.0;
+   double askPrice = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+   double bidPrice = SymbolInfoDouble(_Symbol,SYMBOL_BID);
+   double tickSize = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
+
+   if(pEntrySigal == "LONG") {
+      if(pSLFixedPoints > 0) {
+         stopLoss = askPrice - pSLFixedPoints * _Point;
+      } else if(pSLFixedPointsMA > 0) {
+         stopLoss = pMA - pSLFixedPointsMA * _Point;
+      }
+   } else if(pEntrySigal == "SHORT") {
+      if(pSLFixedPoints > 0) {
+         stopLoss = askPrice + pSLFixedPoints * _Point;
+      } else if(pSLFixedPointsMA > 0) {
+         stopLoss = pMA + pSLFixedPointsMA * _Point;
+      }
+   }
+   stopLoss = round(stopLoss/tickSize)*tickSize;
+   return stopLoss;
+}
+
+//+------------------------------------------------------------------+
+//|                                                                  |
+//+------------------------------------------------------------------+
+double CalculateTakeProfit(string pEntrySigal,int pTPFixedPoints) {
+   double takeProfit = 0.0;
+   double askPrice = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+   double bidPrice = SymbolInfoDouble(_Symbol,SYMBOL_BID);
+   double tickSize = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
+
+   if(pEntrySigal == "LONG") {
+      if(pTPFixedPoints > 0) {
+         takeProfit = askPrice + pTPFixedPoints * _Point;
+      }
+   } else if(pEntrySigal == "SHORT") {
+      if(pTPFixedPoints > 0) {
+         takeProfit = askPrice - pTPFixedPoints * _Point;
+      }
+   }
+   takeProfit = round(takeProfit/tickSize)*tickSize;
+   return takeProfit;
 }
 //+------------------------------------------------------------------+
