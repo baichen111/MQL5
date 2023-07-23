@@ -80,16 +80,18 @@ void OnTick() {
       double ma2 = ma(MAHandle,2);
 
       // trade exit
-      string exitSignal = MA_ExitSignal(close1,close2,ma1,ma2);
-      if(exitSignal == "EXIT_LONG" || exitSignal == "EXIT_SHORT") {
-
+      string exitSignal = MA_ExitSignal(close1,close2,ma1,ma2);         // check exit signal "EXIT_LONG" or "EXIT_SHORT"
+      if(exitSignal == "EXIT_LONG" || exitSignal == "EXIT_SHORT") {     
+         CloseTrades(MagicNumber,exitSignal);                          // execute exit trade
       }
       Sleep(1000);
 
-      // trade placement
-      string entrySignal = MA_EntrySignal(close1,close2,ma1,ma2);
-      if(entrySignal == "LONG" || entrySignal == "SHORT") {
-         ulong ticket = OpenTrades(entrySignal,MagicNumber,FixedVolume);
+      // entry signal and trade placement
+      string entrySignal = MA_EntrySignal(close1,close2,ma1,ma2);   // check entry signal "LONG" or "SHORT"
+      Comment("EA #",MagicNumber," | ",exitSignal," | ",entrySignal, " SIGNAL DETECTED!");
+      
+      if((entrySignal == "LONG" || entrySignal == "SHORT") && CheckPlacedPositions(MagicNumber) == false) {    // check signal and check if any placed positions
+         ulong ticket = OpenTrades(entrySignal,MagicNumber,FixedVolume);              // execute entry trade
       }
    }
 }
@@ -264,11 +266,74 @@ ulong OpenTrades(string pEntrySignal,ulong pMagicNumber,double pFixedVol) {
       }
       Print("Open ",request.symbol," ",pEntrySignal," #",result.order," : ",result.retcode,", Volume: ",result.volume,", Price: ",DoubleToString(bidPrice,_Digits));  // retcode 10018: market closed
    }
-   if(result.retcode == TRADE_RETCODE_DONE || result.retcode == TRADE_RETCODE_DONE_PARTIAL || result.retcode == TRADE_RETCODE_PLACED || result.retcode == TRADE_RETCODE_NO_CHANGES){
-      
+   if(result.retcode == TRADE_RETCODE_DONE || result.retcode == TRADE_RETCODE_DONE_PARTIAL || result.retcode == TRADE_RETCODE_PLACED || result.retcode == TRADE_RETCODE_NO_CHANGES) {
+
       return result.order;                         // return order ticket
    }
    return 0;
 
+}
+//+-------------------------Checked Positions-----------------------------------------+
+bool CheckPlacedPositions(ulong pMagic) {
+   bool placedPositions = false;
+   for(int i = PositionsTotal() - 1; i >= 0; i--) {
+      ulong positionTicket = PositionGetTicket(i);
+      PositionSelectByTicket(positionTicket);
+
+      ulong posMagic = PositionGetInteger(POSITION_MAGIC);
+
+      if(posMagic == pMagic) {
+         placedPositions = true;
+         break;
+      }
+   }
+   return placedPositions;
+}
+//+------------------------Close Positions------------------------------------------+
+void CloseTrades(ulong pMagic,string pExitSignal) {
+//Request and result declaration and initialization
+   MqlTradeRequest request = {};
+   MqlTradeResult result = {};
+
+   for(int i = PositionsTotal() - 1; i>=0; i--) {
+      //Reset request and result values
+      ZeroMemory(request);
+      ZeroMemory(result);
+
+      ulong positionTicket = PositionGetTicket(i);
+      PositionSelectByTicket(positionTicket);     // Selects an open position to work with based on the ticket number specified in the position
+
+      ulong posMagic = PositionGetInteger(POSITION_MAGIC);
+      ulong posType = PositionGetInteger(POSITION_TYPE);
+
+      if(posMagic == pMagic && pExitSignal == "EXIT_LONG" && posType == ORDER_TYPE_BUY) {
+         request.action = TRADE_ACTION_DEAL;
+         request.type = ORDER_TYPE_SELL;
+         request.symbol = _Symbol;
+         request.position = positionTicket;
+         request.volume = PositionGetDouble(POSITION_VOLUME);
+         request.price = SymbolInfoDouble(_Symbol,SYMBOL_BID);
+         request.deviation = 10;
+
+         bool sent = OrderSend(request,result);
+         if(sent == true) {
+            Print("Position #",positionTicket," closed");
+         }
+
+      } else if(posMagic == pMagic && pExitSignal == "EXIT_SHORT" && posType == ORDER_TYPE_SELL) {
+         request.action = TRADE_ACTION_DEAL;
+         request.type = ORDER_TYPE_BUY;
+         request.symbol = _Symbol;
+         request.position = positionTicket;
+         request.volume = PositionGetDouble(POSITION_VOLUME);
+         request.price = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+         request.deviation = 10;
+
+         bool sent = OrderSend(request,result);
+         if(sent == true) {
+            Print("Position #",positionTicket," closed");
+         }
+      }
+   }
 }
 //+------------------------------------------------------------------+
