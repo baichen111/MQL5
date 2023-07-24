@@ -96,6 +96,7 @@ void OnTick() {
          if(ticket > 0) {
             double stopLoss = CalculateStopLoss(entrySignal,SLFixedPoints,SLFixedPointsMA,ma1);
             double takeProfit = CalculateTakeProfit(entrySignal,TPFixedPoints);
+            TradeModification(ticket,MagicNumber,stopLoss,takeProfit);
          }
       }
       //Position Management
@@ -280,6 +281,41 @@ ulong OpenTrades(string pEntrySignal,ulong pMagicNumber,double pFixedVol) {
    return 0;
 
 }
+
+//+-------------------------Trade Modification-----------------------------------------+
+void TradeModification(ulong ticket,ulong pMagic,double pSLPrice,double pTPPrice) {
+   double tickSize = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
+
+   MqlTradeRequest request =  {};
+   MqlTradeResult  result = {};
+
+   request.action = TRADE_ACTION_SLTP;
+   request.position = ticket;
+   request.symbol = _Symbol;
+   request.sl = round(pSLPrice / tickSize) * tickSize;
+   request.tp = round(pTPPrice / tickSize) * tickSize;
+   request.comment = "MOD. "+" | "+_Symbol+ " | "+ string(pMagic) + ", SL: "+DoubleToString(request.sl,_Digits)+", TP: "+DoubleToString(request.tp,_Digits);
+
+   if(request.sl > 0 || request.tp > 0) {
+      Sleep(1000);
+      bool sent = OrderSend(request,result);
+      Print(result.comment);
+      if(!sent) {
+         Print("OrderSend Modification Error: ",GetLastError());
+         Sleep(3000);
+
+         sent = OrderSend(request,result);
+         Print(result.comment);
+         if(!sent)
+            Print("OrderSend Modification 2nd try Error: ", GetLastError());
+
+      }
+   }
+}
+
+
+
+
 //+-------------------------Checked Positions-----------------------------------------+
 bool CheckPlacedPositions(ulong pMagic) {
    bool placedPositions = false;
@@ -388,4 +424,6 @@ double CalculateTakeProfit(string pEntrySigal,int pTPFixedPoints) {
    takeProfit = round(takeProfit/tickSize)*tickSize;
    return takeProfit;
 }
+//+------------------------------------------------------------------+
+
 //+------------------------------------------------------------------+
