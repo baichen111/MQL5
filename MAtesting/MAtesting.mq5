@@ -100,6 +100,7 @@ void OnTick() {
          }
       }
       //Position Management
+      if(TSLFixedPoints > 0) TrailingStopLoss(MagicNumber,TSLFixedPoints);
 
    }
 }
@@ -426,4 +427,54 @@ double CalculateTakeProfit(string pEntrySigal,int pTPFixedPoints) {
 }
 //+------------------------------------------------------------------+
 
+//+---------------------------Trailing stop loss functions---------------------------------------+
+void TrailingStopLoss(ulong pMagic,int pTSLFixedPoints) {
+   MqlTradeRequest request = {};
+   MqlTradeResult result = {};
+
+   for(int i = PositionsTotal()-1; i >= 0 ; i--) {
+      ZeroMemory(request);
+      ZeroMemory(result);
+
+      ulong positionTicket = PositionGetTicket(i);
+      PositionSelectByTicket(positionTicket);
+
+      ulong posMagic = PositionGetInteger(POSITION_MAGIC);
+      ulong posType = PositionGetInteger(POSITION_TYPE);
+      double currentStopLoss = PositionGetDouble(POSITION_SL);
+      double tickSize = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);
+      double newStopLoss;
+
+      if(posMagic == pMagic && posType ==ORDER_TYPE_BUY) {
+         double bidPrice = SymbolInfoDouble(_Symbol,SYMBOL_BID);
+         newStopLoss = bidPrice - (pTSLFixedPoints * _Point);
+         newStopLoss = round(newStopLoss / tickSize)*tickSize;
+
+         if(newStopLoss > currentStopLoss) {
+            request.action = TRADE_ACTION_SLTP;
+            request.position = positionTicket;
+            request.comment = "TSL. "+ " | "+ _Symbol+" | "+ string(pMagic);
+            request.sl = newStopLoss;
+
+            bool sent  = OrderSend(request,result);
+            if(!sent) Print("OrderSend TSL error: ",GetLastError());
+         }
+      }
+      else if(posMagic == pMagic && posType == ORDER_TYPE_SELL) {
+         double askPrice = SymbolInfoDouble(_Symbol,SYMBOL_ASK);
+         newStopLoss = askPrice + (pTSLFixedPoints * _Point);
+         newStopLoss = round(newStopLoss / tickSize)*tickSize;
+
+         if(newStopLoss < currentStopLoss) {
+            request.action = TRADE_ACTION_SLTP;
+            request.position = positionTicket;
+            request.comment = "TSL. "+ " | "+ _Symbol+" | "+ string(pMagic);
+            request.sl = newStopLoss;
+
+            bool sent  = OrderSend(request,result);
+            if(!sent) Print("OrderSend TSL error: ",GetLastError());
+         }
+      }
+   }
+}
 //+------------------------------------------------------------------+
