@@ -100,7 +100,9 @@ void OnTick() {
       }
       //Position Management
       if(TSLFixedPoints > 0) TrailingStopLoss(MagicNumber,TSLFixedPoints);  // trailing stop loss
-
+      if(BEFixedPoints > 0) BreakEven(MagicNumber,BEFixedPoints);  // break even
    }
 }
+
+
 

@@ -420,5 +420,62 @@ double AdjustBelowStopLevel(double pCurrentPrice,double pPriceToAdjust,int pPoin
    }
    return adjustedPrice;
 }
-//+------------------------------------------------------------------+
+//+-----------------------Break Even-------------------------------------------+
+void BreakEven(ulong pMagic,int pBEFixedPoints)
+{	
+	//Request and Result Declaration and Initialization
+   MqlTradeRequest request = {};
+   MqlTradeResult  result  = {};
+         	
+	for(int i = PositionsTotal() - 1; i >= 0; i--)
+	{
+      //Reset of request and result values
+      ZeroMemory(request);
+      ZeroMemory(result);
+         	   
+	   ulong positionTicket = PositionGetTicket(i);
+	   PositionSelectByTicket(positionTicket);
 
+	   ulong posMagic = PositionGetInteger(POSITION_MAGIC);
+	   ulong posType = PositionGetInteger(POSITION_TYPE);   
+      double currentStopLoss = PositionGetDouble(POSITION_SL);   
+      double tickSize = SymbolInfoDouble(_Symbol,SYMBOL_TRADE_TICK_SIZE);	
+	   double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);      	   
+	   double newStopLoss = round(openPrice/tickSize) * tickSize;
+	   
+	   if(posMagic == pMagic && posType == ORDER_TYPE_BUY)
+	   {        
+         double bidPrice = SymbolInfoDouble(_Symbol,SYMBOL_BID);         
+         double BEThreshold = openPrice + (pBEFixedPoints*_Point);
+         
+         if(newStopLoss > currentStopLoss && bidPrice > BEThreshold)
+         {
+            request.action = TRADE_ACTION_SLTP;
+            request.position = positionTicket;
+            request.comment  = "BE." + " | " + _Symbol + " | " + string(pMagic);
+            request.sl = newStopLoss;
+            request.tp = PositionGetDouble(POSITION_TP);
+            
+            bool sent = OrderSend(request,result);
+      	   if(!sent) Print("OrderSend BE error: ", GetLastError());            
+         }     
+	   }
+	   else if(posMagic == pMagic && posType == ORDER_TYPE_SELL)
+	   {                 
+         double askPrice = SymbolInfoDouble(_Symbol,SYMBOL_ASK);                  
+         double BEThreshold = openPrice - (pBEFixedPoints*_Point);
+         
+         if(newStopLoss < currentStopLoss && askPrice < BEThreshold)
+         {
+            request.action = TRADE_ACTION_SLTP;
+            request.position = positionTicket;
+            request.comment  = "BE." + " | " + _Symbol + " | " + string(pMagic);
+            request.sl = newStopLoss;
+            request.tp = PositionGetDouble(POSITION_TP);
+            
+            bool sent = OrderSend(request,result);
+      	   if(!sent) Print("OrderSend BE error: ", GetLastError());
+         }        
+	   }    
+	}
+}
